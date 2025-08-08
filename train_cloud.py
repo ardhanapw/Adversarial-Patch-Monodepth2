@@ -1,8 +1,8 @@
+import comet_ml
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from tensorboard import program
 
-import comet_ml
 import json
 
 import argparse
@@ -33,10 +33,10 @@ parser.add_argument('--decoder_path', type=str, default="mono_1024x320/depth.pth
 
 parser.add_argument('--height', type=int, help='input image height', default=320)
 parser.add_argument('--width', type=int, help='input image width', default=1024)
-parser.add_argument('-b', '--batch_size', type=int, help='mini-batch size', default=16)
+parser.add_argument('-b', '--batch_size', type=int, help='mini-batch size', default=32)
 parser.add_argument('-j', '--num_threads', type=int, help='data loading workers', default=4)
-#parser.add_argument('--lr', type=float, help='initial learning rate', default=1e-3)
-parser.add_argument('--lr', type=float, help='initial learning rate', default=3e-2)
+parser.add_argument('--lr', type=float, help='initial learning rate', default=1e-3)
+#parser.add_argument('--lr', type=float, help='initial learning rate', default=3e-2)
 parser.add_argument('--num_epochs', type=int, help='number of total epochs', default=80)
 parser.add_argument('--seed', type=int, help='seed for random functions, and network initialization', default=0)
 parser.add_argument('--patch_size', type=int, help='Resolution of patch', default=256)
@@ -96,8 +96,6 @@ def init_tensorboard(log_path):
 
 def main():
     makedirs(args.export_adv_patch_path)
-    
-    comet_ml.login()
     
     with open("comet_ml_cred.json", "r") as f:
         comet_ml_cred = json.load(f)
@@ -211,8 +209,10 @@ def main():
                     disp_loss += distill_loss
 
                 elif 'monodepth2' in args.model:
-                    adv_target_distill_disp = adv.create_fake_disp(original_disp.detach(), mask_t[:, 0, :, :].detach(), args.target_disp)
+                    #adv_target_distill_disp = adv.create_fake_disp(original_disp.detach(), mask_t[:, 0, :, :].detach(), args.target_disp)
                     est_disp = models.distill(attacked_img)
+                    adv_target_distill_disp = adv.create_fake_disp(original_disp.detach(), mask_t[:, 0, :, :].detach(), torch.min(est_disp)) #smaller disparity leads to longer depth
+                    
                     distill_loss = torch.nn.functional.l1_loss(torch.mul(mask_t, adv_target_distill_disp), torch.mul(mask_t, est_disp)).mean() #loss in the patch area
                     disp_loss += distill_loss
 
@@ -256,7 +256,6 @@ def main():
         print('===============================')
         print(f"Total training time: {format_time(int(total_time))}")
         print('Epoch: ', epoch)
-        print('Total time: ', format_time(int(total_time)))
         print('epoch loss: ', ep_loss)
         print('disparity loss: ', ep_disp_loss)
         print('NPS loss: ', ep_nps_loss)

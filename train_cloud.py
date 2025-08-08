@@ -97,6 +97,8 @@ def init_tensorboard(log_path):
 def main():
     makedirs(args.export_adv_patch_path)
     
+    comet_ml.login()
+    
     with open("comet_ml_cred.json", "r") as f:
         comet_ml_cred = json.load(f)
         

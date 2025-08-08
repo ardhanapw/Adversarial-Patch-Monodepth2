@@ -21,7 +21,7 @@ warnings.simplefilter('ignore')
 
 parser = argparse.ArgumentParser(description='Generating Adversarial Patches')
 parser.add_argument('--data_root', type=str, help='path to dataset', default='Src/input_img')
-parser.add_argument('--train_list', type=str, default='Src/list/test_list.txt')
+parser.add_argument('--train_list', type=str, default='Src/list/train_list.txt')
 parser.add_argument('--print_file', type=str, default='Src/list/printable30values.txt')
 
 parser.add_argument('--encoder_path', type=str, default="mono_1024x320/encoder.pth")

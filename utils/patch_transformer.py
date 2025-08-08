@@ -4,7 +4,6 @@ import numpy as np
 import cv2
 import math
 import torch.nn.functional as F
-import torchgeometry as tgm
 
 
 class CreateFakeDisp(nn.Module):

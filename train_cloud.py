@@ -2,6 +2,9 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from tensorboard import program
 
+import comet_ml
+import json
+
 import argparse
 import cv2
 import numpy as np
@@ -23,14 +26,15 @@ parser = argparse.ArgumentParser(description='Generating Adversarial Patches')
 parser.add_argument('--data_root', type=str, help='path to dataset', default='Src/left_images')
 parser.add_argument('--train_list', type=str, default='Src/list/train_list.txt')
 parser.add_argument('--print_file', type=str, default='Src/list/printable30values.txt')
+parser.add_argument('--distill_ckpt', type=str, default="models/guo/distill_model.ckpt")
 
 parser.add_argument('--encoder_path', type=str, default="mono_1024x320/encoder.pth")
 parser.add_argument('--decoder_path', type=str, default="mono_1024x320/depth.pth")
 
 parser.add_argument('--height', type=int, help='input image height', default=320)
 parser.add_argument('--width', type=int, help='input image width', default=1024)
-parser.add_argument('-b', '--batch_size', type=int, help='mini-batch size', default=2)
-parser.add_argument('-j', '--num_threads', type=int, help='data loading workers', default=0)
+parser.add_argument('-b', '--batch_size', type=int, help='mini-batch size', default=16)
+parser.add_argument('-j', '--num_threads', type=int, help='data loading workers', default=4)
 #parser.add_argument('--lr', type=float, help='initial learning rate', default=1e-3)
 parser.add_argument('--lr', type=float, help='initial learning rate', default=3e-2)
 parser.add_argument('--num_epochs', type=int, help='number of total epochs', default=80)
@@ -39,6 +43,7 @@ parser.add_argument('--patch_size', type=int, help='Resolution of patch', defaul
 parser.add_argument('--patch_shape', type=str, help='circle or square', default='square')
 parser.add_argument('--patch_path', type=str, help='Initialize patch from file')
 parser.add_argument('--mask_path', type=str, help='Initialize mask from file')
+parser.add_argument('--export_adv_patch_path', type=str, help='Export generated adv patch and its mask', default='Dst/checkpoints')
 parser.add_argument('--log_path', type=str, help='Tensorboard logging destination', default='Dst/runs/train_adversarial')
 parser.add_argument('--log_interval', type=int, help='Tensorboard batch log interval', default=2000) #log every 2000 image
 
@@ -87,18 +92,18 @@ def disp_to_depth(disp, min_depth, max_depth):
 """
 
 def init_tensorboard(log_path):
-    tboard = program.TensorBoard()
-    tboard.configure(logdir=log_path, port=8008)
-    url = tboard.launch()
-    print(f"Tensorboard logger started on {url}")
-    
     return SummaryWriter(log_path)
 
 def main():
-    save_path = 'Dst/checkpoints/' + args.name
-    print('===============================')
-    print('=> Everything will be saved to \"{}\"'.format(save_path))
-    makedirs(save_path)
+    makedirs(args.export_adv_patch_path)
+    
+    with open("comet_ml_cred.json", "r") as f:
+        comet_ml_cred = json.load(f)
+        
+    experiment = comet_ml.start(
+                    api_key=comet_ml_cred["api_key"],
+                    project_name="Generate adv patch on Monodepthv2"
+                )
 
     torch.manual_seed(args.seed)
     torch.backends.cudnn.benchmark = True
@@ -248,36 +253,16 @@ def main():
         total_time = time.time() - start_time
         print('===============================')
         print(f"Total training time: {format_time(int(total_time))}")
-        print(' FIN EPOCH: ', epoch)
-        print('TOTAL TIME: ', format_time(int(total_time)))
-        print('EPOCH LOSS: ', ep_loss)
-        print(' DISP LOSS: ', ep_disp_loss)
-        print('  NPS LOSS: ', ep_nps_loss)
-        print('   TV LOSS: ', ep_tv_loss)
-        
-        
-        """
-        ep_disp_loss = ep_disp_loss/len(train_loader)
-        ep_nps_loss = ep_nps_loss/len(train_loader)
-        ep_tv_loss = ep_tv_loss/len(train_loader)
-        ep_loss = ep_loss/len(train_loader)
-        scheduler.step(ep_loss)
-
-        ep_time = time.time() - ep_time
-        total_time = time.time() - start_time
-        print('===============================')
-        print(' FIN EPOCH: ', epoch)
-        print('TOTAL TIME: ', format_time(int(total_time)))
-        print('EPOCH TIME: ', format_time(int(ep_time)))
-        print('EPOCH LOSS: ', ep_loss)
-        print(' DISP LOSS: ', ep_disp_loss)
-        print('  NPS LOSS: ', ep_nps_loss)
-        print('   TV LOSS: ', ep_tv_loss)
-        np.save(save_path + '/epoch_{}_patch.npy'.format(str(epoch)), patch_cpu.data.numpy())
-        np.save(save_path + '/epoch_{}_mask.npy'.format(str(epoch)), mask_cpu.data.numpy())
-        #cv2.destroyAllWindows()
-        """
-
+        print('Epoch: ', epoch)
+        print('Total time: ', format_time(int(total_time)))
+        print('epoch loss: ', ep_loss)
+        print('disparity loss: ', ep_disp_loss)
+        print('NPS loss: ', ep_nps_loss)
+        print('TV loss: ', ep_tv_loss)
+        np.save(args.export_adv_patch_path + '/epoch_{}_patch.npy'.format(str(epoch)), patch_cpu.data.numpy())
+        np.save(args.export_adv_patch_path + '/epoch_{}_mask.npy'.format(str(epoch)), mask_cpu.data.numpy())
+    
+    experiment.end()
 
 if __name__ == '__main__':
     main()
